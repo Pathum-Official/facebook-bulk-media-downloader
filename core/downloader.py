@@ -10,6 +10,7 @@ import sys
 import json
 import shutil
 import subprocess
+import urllib.parse
 from pathlib import Path
 from typing import Generator, Dict, Any, Optional
 
@@ -42,43 +43,84 @@ def detect_url_media_type(url: str) -> str:
     return "mixed"
 
 
-def resolve_facebook_url(url: str, browser_cookies: Optional[str] = None) -> str:
+def extract_facebook_video_ids(html: str) -> list:
+    """Extract all unique Facebook video IDs from post HTML."""
+    if not html:
+        return []
+    patterns = [
+        r'"video_id":"(\d+)"',
+        r'\"video_id\":\"(\d+)\"',
+        r'/videos/pcb\.\d+/(\d+)',
+        r'watch/\?v=(\d+)',
+        r'"id":"(\d+)","__typename":"Video"',
+        r'"videoId":"(\d+)"'
+    ]
+    found = []
+    seen = set()
+    for p in patterns:
+        for vid in re.findall(p, html):
+            if len(vid) >= 10 and vid not in seen:
+                seen.add(vid)
+                found.append(vid)
+    return found
+
+
+def resolve_and_probe_facebook(url: str, browser_cookies: Optional[str] = None) -> tuple:
     """
-    Expands Facebook /share/p/, /share/v/, /share/r/ links into direct canonical permalinks.
-    gallery-dl does not natively recognize /share/ links.
+    Expands Facebook /share/p/, /share/v/, /share/r/ and /posts/ links into direct canonical permalinks,
+    and returns (canonical_url, html_content).
+    Preserves story_fbid and user id parameters correctly.
     """
-    if "/share/" not in url:
-        return url
+    clean_input = url.strip()
+    if "/share/" not in clean_input and "/posts/" not in clean_input:
+        return clean_input, ""
 
     ydl_opts = {
         'skip_download': True,
         'quiet': True,
         'no_warnings': True,
-        'extract_flat': True,
     }
     if browser_cookies:
         ydl_opts['cookiesfrombrowser'] = (browser_cookies,)
     elif COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
         ydl_opts['cookiefile'] = str(COOKIES_FILE)
 
+    resolved_url = clean_input
+    html = ""
+
     try:
         import yt_dlp
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ie = ydl.get_info_extractor('Generic')
-            res = ie._download_webpage_handle(url, 'share_probe')
+            res = ie._download_webpage_handle(clean_input, 'share_probe')
             redirected = res[1].url if hasattr(res[1], 'url') else res[1].geturl()
-            if redirected and redirected != url:
-                clean_url = redirected.split('?')[0]
-                # If post URL, convert to permalink format preferred by gallery-dl FacebookSetExtractor
-                match = re.search(r'facebook\.com/([^/?#]+)/posts/([^/?#]+)', clean_url)
-                if match:
-                    user_id, fbid = match.group(1), match.group(2)
-                    return f"https://web.facebook.com/permalink.php?story_fbid={fbid}&id={user_id}"
-                return clean_url
+            html = res[0]
+
+            if redirected:
+                parsed = urllib.parse.urlparse(redirected)
+                qs = urllib.parse.parse_qs(parsed.query)
+
+                # Check if it redirected to a permalink.php (preserve story_fbid and id)
+                if "permalink.php" in parsed.path:
+                    story_fbid = qs.get("story_fbid", [None])[0]
+                    user_id = qs.get("id", [None])[0]
+                    if story_fbid:
+                        clean_link = f"https://web.facebook.com/permalink.php?story_fbid={story_fbid}"
+                        if user_id:
+                            clean_link += f"&id={user_id}"
+                        resolved_url = clean_link
+                else:
+                    # Check if it redirected to /posts/
+                    match = re.search(r'facebook\.com/([^/?#]+)/posts/([^/?#]+)', redirected)
+                    if match:
+                        user_id, fbid = match.group(1), match.group(2)
+                        resolved_url = f"https://web.facebook.com/permalink.php?story_fbid={fbid}&id={user_id}"
+                    else:
+                        resolved_url = redirected.split("?")[0]
     except Exception:
         pass
 
-    return url
+    return resolved_url, html
 
 
 class FBMediaDownloader:
@@ -187,13 +229,11 @@ class FBMediaDownloader:
 
         return downloaded_files
 
-    def download_videos(self, url: str) -> Generator[Dict[str, Any], None, list]:
-        """
-        Download Facebook video / reels / multi-videos using yt-dlp.
-        Yields real-time events.
-        """
-        yield {"type": "log", "message": "🎬 Initializing Video Extraction engine (yt-dlp)..."}
-        yield {"type": "progress", "percent": 25, "text": "Extracting Facebook video stream..."}
+    def _download_single_video(self, video_url: str, index: int = 1, total: int = 1) -> Generator[Dict[str, Any], None, list]:
+        """Download an individual video URL via yt-dlp."""
+        prefix = f"Video {index}/{total}: " if total > 1 else ""
+        yield {"type": "log", "message": f"🎬 {prefix}Extracting video stream: {video_url}"}
+        yield {"type": "progress", "percent": 25, "text": f"{prefix}Extracting video stream..."}
 
         target_folder = self.output_dir / "Facebook_Videos"
         target_folder.mkdir(parents=True, exist_ok=True)
@@ -210,7 +250,7 @@ class FBMediaDownloader:
             "-o", output_template
         ]
         cmd.extend(self._get_cookie_args_ytdlp())
-        cmd.append(url)
+        cmd.append(video_url)
 
         downloaded_videos = []
         try:
@@ -233,25 +273,29 @@ class FBMediaDownloader:
                 if "[download] Destination:" in line_str:
                     filename = Path(line_str.split("Destination:")[-1].strip()).name
                     video_title = filename
-                    yield {"type": "log", "message": f"📥 Starting download: {filename}"}
+                    yield {"type": "log", "message": f"📥 {prefix}Starting download: {filename}"}
 
                 elif "[download]" in line_str and "%" in line_str:
-                    # Match progress like 45.2%
                     match = re.search(r"(\d+(?:\.\d+)?)%", line_str)
                     if match:
                         pct = float(match.group(1))
-                        mapped_pct = int(30 + (pct * 0.6))
-                        current_percent = mapped_pct
+                        if total > 1:
+                            video_slice = 70.0 / total
+                            base_pct = 20.0 + (index - 1) * video_slice
+                            mapped_pct = int(base_pct + (pct * video_slice / 100.0))
+                        else:
+                            mapped_pct = int(30 + (pct * 0.6))
+                        current_percent = min(mapped_pct, 95)
                         yield {
                             "type": "progress",
                             "percent": current_percent,
-                            "text": f"Downloading video: {pct}%"
+                            "text": f"{prefix}Downloading video: {pct}%"
                         }
                     yield {"type": "log", "message": line_str}
 
                 elif "[Merger]" in line_str or "[ffmpeg]" in line_str:
-                    yield {"type": "log", "message": "🎞️ Merging high-quality audio & video streams..."}
-                    yield {"type": "progress", "percent": 95, "text": "Finalizing video..."}
+                    yield {"type": "log", "message": f"🎞️ {prefix}Merging audio & video streams..."}
+                    yield {"type": "progress", "percent": 95, "text": f"{prefix}Finalizing video..."}
 
                 elif "[download] 100%" in line_str:
                     downloaded_videos.append(video_title)
@@ -269,23 +313,77 @@ class FBMediaDownloader:
 
             process.wait()
 
-            if process.returncode == 0:
+            if process.returncode == 0 or len(downloaded_videos) > 0:
                 yield {
                     "type": "log",
                     "level": "success",
-                    "message": "✅ Video download completed successfully!"
+                    "message": f"✅ {prefix}Video download completed successfully!"
                 }
             else:
                 yield {
                     "type": "log",
                     "level": "info",
-                    "message": "Note: yt-dlp did not detect a video on this link (might be a photo post)."
+                    "message": f"Note: yt-dlp did not detect a video on {video_url}"
                 }
 
         except Exception as e:
             yield {"type": "error", "message": f"Video download error: {str(e)}"}
 
         return downloaded_videos
+
+    def download_videos(self, url: str, html: str = "") -> Generator[Dict[str, Any], None, list]:
+        """
+        Download Facebook video / reels / multi-videos using yt-dlp.
+        Supports multi-video posts by extracting individual video IDs!
+        """
+        yield {"type": "log", "message": "🎬 Initializing Video Extraction engine (yt-dlp)..."}
+        yield {"type": "progress", "percent": 20, "text": "Analyzing video content..."}
+
+        # Check if URL is already a single video watch or reel
+        is_single_direct_video = any(k in url.lower() for k in ["/watch?v=", "/watch/?v=", "/reel/"]) and "pcb." not in url
+
+        video_ids = []
+        if not is_single_direct_video:
+            if html:
+                video_ids = extract_facebook_video_ids(html)
+            if not video_ids:
+                try:
+                    import yt_dlp
+                    ydl_opts = {'skip_download': True, 'quiet': True, 'no_warnings': True}
+                    if self.browser_cookies:
+                        ydl_opts['cookiesfrombrowser'] = (self.browser_cookies,)
+                    elif COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
+                        ydl_opts['cookiefile'] = str(COOKIES_FILE)
+
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ie = ydl.get_info_extractor('Generic')
+                        probe_res = ie._download_webpage_handle(url, 'video_probe')
+                        video_ids = extract_facebook_video_ids(probe_res[0])
+                except Exception:
+                    pass
+
+        downloaded_all = []
+
+        if video_ids:
+            yield {
+                "type": "log",
+                "level": "success",
+                "message": f"🎥 Multi-video post detected! Found {len(video_ids)} video(s) in this post. Downloading all..."
+            }
+            for i, vid in enumerate(video_ids, 1):
+                watch_url = f"https://www.facebook.com/watch/?v={vid}"
+                for ev in self._download_single_video(watch_url, index=i, total=len(video_ids)):
+                    if ev.get("type") == "item_downloaded":
+                        downloaded_all.append(ev.get("filename"))
+                    yield ev
+        else:
+            # Single video download
+            for ev in self._download_single_video(url, index=1, total=1):
+                if ev.get("type") == "item_downloaded":
+                    downloaded_all.append(ev.get("filename"))
+                yield ev
+
+        return downloaded_all
 
     def download(self, url: str, mode: str = "auto") -> Generator[Dict[str, Any], None, Dict[str, Any]]:
         """
@@ -309,10 +407,11 @@ class FBMediaDownloader:
         yield {"type": "log", "message": f"🔗 Target URL: {url}"}
         yield {"type": "log", "message": f"📁 Save Directory: {self.output_dir}"}
 
-        # Resolve modern Facebook /share/ links into canonical permalinks
-        if "/share/" in url:
-            yield {"type": "log", "message": "🔍 Modern Facebook share link detected (/share/...). Resolving canonical post..."}
-            resolved_url = resolve_facebook_url(url, browser_cookies=self.browser_cookies)
+        # Resolve modern Facebook /share/ and /posts/ links into canonical permalinks & probe HTML
+        html = ""
+        if "/share/" in url or "/posts/" in url:
+            yield {"type": "log", "message": "🔍 Analyzing Facebook link and resolving canonical post..."}
+            resolved_url, html = resolve_and_probe_facebook(url, browser_cookies=self.browser_cookies)
             if resolved_url != url:
                 yield {"type": "log", "level": "success", "message": f"🔗 Resolved canonical post: {resolved_url}"}
                 url = resolved_url
@@ -330,7 +429,7 @@ class FBMediaDownloader:
         # Optimization: If mode is auto and link is clearly a video/reel, prioritize video first
         if mode == "auto" and detected == "video":
             # Video first
-            for event in self.download_videos(url):
+            for event in self.download_videos(url, html=html):
                 if event.get("type") == "item_downloaded":
                     videos_count += 1
                 yield event
@@ -352,8 +451,8 @@ class FBMediaDownloader:
 
             # If no photos found, fallback to video check
             if photos_count == 0:
-                yield {"type": "log", "message": "Checking if post contains video..."}
-                for event in self.download_videos(url):
+                yield {"type": "log", "message": "Checking if post contains video(s)..."}
+                for event in self.download_videos(url, html=html):
                     if event.get("type") == "item_downloaded":
                         videos_count += 1
                     yield event
@@ -367,7 +466,7 @@ class FBMediaDownloader:
                     yield event
 
             if run_videos:
-                for event in self.download_videos(url):
+                for event in self.download_videos(url, html=html):
                     if event.get("type") == "item_downloaded":
                         videos_count += 1
                     yield event
