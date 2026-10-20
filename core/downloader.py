@@ -35,11 +35,50 @@ def detect_url_media_type(url: str) -> str:
     returns 'video', 'photo', or 'mixed'
     """
     url_lower = url.lower()
-    if any(k in url_lower for k in ["/watch", "/reel", "/videos/", "fb.watch"]):
+    if any(k in url_lower for k in ["/watch", "/reel", "/videos/", "fb.watch", "/share/v/", "/share/r/"]):
         return "video"
-    if any(k in url_lower for k in ["/photo", "/photos", "/albums", "media/set"]):
+    if any(k in url_lower for k in ["/photo", "/photos", "/albums", "media/set", "/share/p/"]):
         return "photo"
     return "mixed"
+
+
+def resolve_facebook_url(url: str, browser_cookies: Optional[str] = None) -> str:
+    """
+    Expands Facebook /share/p/, /share/v/, /share/r/ links into direct canonical permalinks.
+    gallery-dl does not natively recognize /share/ links.
+    """
+    if "/share/" not in url:
+        return url
+
+    ydl_opts = {
+        'skip_download': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
+    }
+    if browser_cookies:
+        ydl_opts['cookiesfrombrowser'] = (browser_cookies,)
+    elif COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
+        ydl_opts['cookiefile'] = str(COOKIES_FILE)
+
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ie = ydl.get_info_extractor('Generic')
+            res = ie._download_webpage_handle(url, 'share_probe')
+            redirected = res[1].url if hasattr(res[1], 'url') else res[1].geturl()
+            if redirected and redirected != url:
+                clean_url = redirected.split('?')[0]
+                # If post URL, convert to permalink format preferred by gallery-dl FacebookSetExtractor
+                match = re.search(r'facebook\.com/([^/?#]+)/posts/([^/?#]+)', clean_url)
+                if match:
+                    user_id, fbid = match.group(1), match.group(2)
+                    return f"https://web.facebook.com/permalink.php?story_fbid={fbid}&id={user_id}"
+                return clean_url
+    except Exception:
+        pass
+
+    return url
 
 
 class FBMediaDownloader:
@@ -269,6 +308,14 @@ class FBMediaDownloader:
         }
         yield {"type": "log", "message": f"🔗 Target URL: {url}"}
         yield {"type": "log", "message": f"📁 Save Directory: {self.output_dir}"}
+
+        # Resolve modern Facebook /share/ links into canonical permalinks
+        if "/share/" in url:
+            yield {"type": "log", "message": "🔍 Modern Facebook share link detected (/share/...). Resolving canonical post..."}
+            resolved_url = resolve_facebook_url(url, browser_cookies=self.browser_cookies)
+            if resolved_url != url:
+                yield {"type": "log", "level": "success", "message": f"🔗 Resolved canonical post: {resolved_url}"}
+                url = resolved_url
 
         photos_count = 0
         videos_count = 0

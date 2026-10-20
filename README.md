@@ -20,9 +20,11 @@
 ## ✨ ප්‍රධාන විශේෂාංග (Key Features)
 
 - 📸 **Bulk Single-Post Photo Downloader:** ෆේස්බුක් පෝස්ට් එකක ඇති ඡායාරූප 1ක් හෝ 100+ ක් වුවද එකවර මුල් ගුණාත්මකභාවයෙන්ම (Original Resolution) බාගත කිරීමේ හැකියාව.
+- 🔗 **Smart Share Link Resolver:** ෆේස්බුක් හි නවතම `share/p/`, `share/v/`, `share/r/` කෙටි ලින්ක්ස් (Short links) ස්වයංක්‍රීයව හඳුනාගෙන නියමිත Post එකට Redirect කර බාගත කිරීමේ හැකියාව.
+- 👤 **Full Profile / Page Photo Downloader:** ඕනෑම Profile එකක (`facebook.com/username`) ලින්ක් එකක් ලබාදුන් විට එහි ඇති සියලුම Albums සහ Photos එකවර බාගත කර ගැනීමේ හැකියාව.
 - 🎬 **Facebook Video & Reels Downloader:** ෆේස්බුක් තනි වීඩියෝ, පෝස්ට් එකක ඇති වීඩියෝ කිහිපයක්, Reels හෝ Facebook Watch වීඩියෝ උපරිම ගුණාත්මකභාවයෙන් (1080p Full HD) සහ පැහැදිලි ශබ්දය (Audio Merge) සහිතව භාගත කිරීම.
 - ⚡ **Smart Auto-Detect Mode:** ඔබ ලබාදෙන ලින්ක් එකේ ඇත්තේ ඡායාරූපද, වීඩියෝද යන්න ස්වයංක්‍රීයව හඳුනාගෙන අවශ්‍ය සියල්ල භාගත කිරීම.
-- 🖥️ **Sleek Modern Web Dashboard:** අඳුරු මාදිලිය (Dark Theme), Glassmorphism, සජීවී ප්‍රගති තීරුව (Live Progress Bar) සහ Real-time Terminal Logs සහිත සුපිරි වෙබ් අතුරුමුහුණත.
+- 🖥️ **Sleek Modern Web Dashboard:** අඳුරු මාදිලිය (Dark Theme), Favicon, සජීවී ප්‍රගති තීරුව (Live Progress Bar), ක්ලික් කර open කළ හැකි Recent Downloads සහ Real-time Terminal Logs සහිත සුපිරි වෙබ් අතුරුමුහුණත.
 - 🚀 **1-Click Windows Launcher (`Start_PTM_Prime.bat`):** කිසිදු කමාන්ඩ් එකක් ටයිප් නොකර ඩබල් ක්ලික් කිරීමෙන් පමණක් මෘදුකාංගය පණගැන්වීමේ පහසුව.
 - 📂 **Direct Folder Explorer:** භාගත කළ සැනින් Windows File Explorer හරහා ෆෝල්ඩරය විවෘත කිරීමේ බොත්තම.
 - 🍪 **Private Posts & Cookie Support:** ලොගින් විය යුතු පුද්ගලික පෝස්ට් හෝ ගෲප් පෝස්ට් සඳහා Chrome, Edge, Firefox බ්‍රවුසරයෙන් ස්වයංක්‍රීයව Cookies ලබාගැනීමේ හැකියාව.
