@@ -135,6 +135,30 @@ document.addEventListener("DOMContentLoaded", () => {
     btnOpenFolderHeader.addEventListener("click", triggerOpenFolder);
     btnOpenCompletedFolder.addEventListener("click", triggerOpenFolder);
 
+    // Open Individual Downloaded File
+    async function openDownloadedMedia(relPath, action = "open") {
+        if (!relPath) return;
+        try {
+            const res = await fetch("/api/open-file", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rel_path: relPath, action: action })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (action === "locate") {
+                    showToast("📂 File highlighted in Explorer!");
+                } else {
+                    showToast("▶️ Opening file...");
+                }
+            } else {
+                showToast("⚠️ Could not open file: " + (data.error || "Unknown"));
+            }
+        } catch (err) {
+            showToast("⚠️ Error opening file.");
+        }
+    }
+
     // Refresh History
     async function loadHistory() {
         try {
@@ -142,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
             if (data.success && data.items.length > 0) {
                 historyList.innerHTML = data.items.map(item => `
-                    <div class="history-item">
+                    <div class="history-item" data-relpath="${item.rel_path}" title="Click to open ${item.name}">
                         <div class="history-left">
                             <i data-lucide="${item.type === 'video' ? 'film' : 'image'}" class="history-icon ${item.type}"></i>
                             <div>
@@ -152,9 +176,37 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                         <div class="history-right">
                             <span class="history-size">${item.size_formatted}</span>
+                            <div class="history-actions">
+                                <button type="button" class="history-btn btn-open-media" data-relpath="${item.rel_path}" title="Open with default app">
+                                    <i data-lucide="external-link"></i>
+                                    <span>Open</span>
+                                </button>
+                                <button type="button" class="history-btn history-btn-locate btn-locate-media" data-relpath="${item.rel_path}" title="Show in Windows Explorer">
+                                    <i data-lucide="folder-search"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `).join("");
+
+                // Attach click listeners to rows and buttons
+                historyList.querySelectorAll(".history-item").forEach(row => {
+                    row.addEventListener("click", (e) => {
+                        const locateBtn = e.target.closest(".btn-locate-media");
+                        const openBtn = e.target.closest(".btn-open-media");
+
+                        if (locateBtn) {
+                            e.stopPropagation();
+                            openDownloadedMedia(locateBtn.dataset.relpath, "locate");
+                        } else if (openBtn) {
+                            e.stopPropagation();
+                            openDownloadedMedia(openBtn.dataset.relpath, "open");
+                        } else {
+                            openDownloadedMedia(row.dataset.relpath, "open");
+                        }
+                    });
+                });
+
                 if (window.lucide) lucide.createIcons();
             } else {
                 historyList.innerHTML = `

@@ -7,10 +7,11 @@ Powered by PTM Prime
 import os
 import sys
 import json
+import subprocess
 import webbrowser
 from pathlib import Path
 from threading import Timer
-from flask import Flask, render_template, request, Response, jsonify
+from flask import Flask, render_template, request, Response, jsonify, send_from_directory
 
 # Ensure local imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -113,9 +114,11 @@ def get_download_history():
                     ext = file_path.suffix.lower()
                     if ext in [".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mkv", ".webm"]:
                         stat = file_path.stat()
+                        rel_path = file_path.relative_to(DOWNLOADS_DIR).as_posix()
                         items.append({
                             "name": file_path.name,
                             "folder": file_path.parent.name,
+                            "rel_path": rel_path,
                             "type": "video" if ext in [".mp4", ".mkv", ".webm"] else "photo",
                             "size_bytes": stat.st_size,
                             "size_formatted": f"{stat.st_size / (1024 * 1024):.2f} MB" if stat.st_size > 1024*1024 else f"{stat.st_size / 1024:.1f} KB",
@@ -124,9 +127,49 @@ def get_download_history():
 
         # Sort newest first
         items.sort(key=lambda x: x["modified"], reverse=True)
-        return jsonify({"success": True, "items": items[:50]})
+        return jsonify({"success": True, "items": items[:100]})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/open-file", methods=["POST"])
+def open_downloaded_file():
+    """Open a specific downloaded file or highlight it in Windows File Explorer."""
+    try:
+        data = request.get_json(silent=True) or {}
+        rel_path = data.get("rel_path")
+        action = data.get("action", "open")  # 'open' (default app) or 'locate' (highlight in explorer)
+
+        if not rel_path:
+            return jsonify({"success": False, "error": "No file path provided"}), 400
+
+        target = (DOWNLOADS_DIR / rel_path).resolve()
+        # Security: ensure file resides inside DOWNLOADS_DIR
+        if not str(target).startswith(str(DOWNLOADS_DIR.resolve())):
+            return jsonify({"success": False, "error": "Access denied"}), 403
+
+        if not target.exists():
+            return jsonify({"success": False, "error": "File does not exist on disk"}), 404
+
+        if sys.platform == "win32":
+            if action == "locate":
+                subprocess.Popen(f'explorer /select,"{str(target)}"')
+            else:
+                os.startfile(str(target))
+        elif sys.platform == "darwin":
+            os.system(f'open "{target}"')
+        else:
+            os.system(f'xdg-open "{target}"')
+
+        return jsonify({"success": True, "path": str(target)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/downloads/<path:filename>")
+def serve_download(filename):
+    """Serve downloaded files for preview or browser viewing."""
+    return send_from_directory(str(DOWNLOADS_DIR), filename)
 
 
 def open_browser():
