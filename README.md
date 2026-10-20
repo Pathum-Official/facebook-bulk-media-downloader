@@ -47,8 +47,8 @@
 
 ### 1. Repository එක Clone කරන්න:
 ```bash
-git clone https://github.com/your-username/fbphotodown.git
-cd fbphotodown
+git clone https://github.com/Pathum-Official/facebook-bulk-media-downloader.git
+cd facebook-bulk-media-downloader
 ```
 
 ### 2. Dependencies Install කරන්න:
