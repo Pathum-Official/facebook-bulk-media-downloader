@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTM Prime - Facebook Media Downloader</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="background-glow top-left"></div>
+    <div class="background-glow bottom-right"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="brand-group">
+                <div class="brand-logo">
+                    <i data-lucide="zap" class="logo-icon"></i>
+                </div>
+                <div>
+                    <div class="brand-title-wrap">
+                        <h1 class="brand-title">PTM Prime</h1>
+                        <span class="brand-badge">FB SUITE</span>
+                    </div>
+                    <p class="brand-subtitle">Facebook Bulk Photo & HD Video Downloader</p>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="server-status" id="serverStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">System Ready</span>
+                </div>
+                <button id="btnOpenFolderHeader" class="btn-secondary" title="Open Downloads Folder">
+                    <i data-lucide="folder"></i>
+                    <span>Downloads Folder</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Card -->
+        <main class="main-content">
+            <section class="download-card glass-panel">
+                <div class="card-header">
+                    <div class="header-tag">
+                        <i data-lucide="sparkles"></i>
+                        <span>POWERED BY PTM PRIME</span>
+                    </div>
+                    <h2 class="card-heading">Download Any Facebook Photos or Videos</h2>
+                    <p class="card-description">Paste any post URL with 1 or 100+ photos, albums, single video, or Facebook reels to download instantly.</p>
+                </div>
+
+                <!-- Input Box -->
+                <form id="downloadForm" class="download-form" onsubmit="return false;">
+                    <div class="input-wrapper">
+                        <div class="input-icon">
+                            <i data-lucide="link"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="urlInput" 
+                            placeholder="Paste Facebook Post, Album, Video, or Reel URL here..." 
+                            autocomplete="off"
+                            required
+                        >
+                        <div class="input-actions">
+                            <button type="button" id="btnPaste" class="icon-btn" title="Paste from Clipboard">
+                                <i data-lucide="clipboard-copy"></i>
+                                <span>Paste</span>
+                            </button>
+                            <button type="button" id="btnClear" class="icon-btn" title="Clear">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mode Selectors -->
+                    <div class="options-container">
+                        <div class="section-label">Select Media Download Type:</div>
+                        <div class="mode-selector-grid">
+                            <label class="mode-chip active" data-mode="auto">
+                                <input type="radio" name="downloadMode" value="auto" checked>
+                                <div class="chip-content">
+                                    <i data-lucide="sparkles" class="chip-icon"></i>
+                                    <div>
+                                        <div class="chip-title">Auto Detect</div>
+                                        <div class="chip-desc">Smartly gets both photos & videos</div>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="mode-chip" data-mode="photos">
+                                <input type="radio" name="downloadMode" value="photos">
+                                <div class="chip-content">
+                                    <i data-lucide="images" class="chip-icon"></i>
+                                    <div>
+                                        <div class="chip-title">Photos Only</div>
+                                        <div class="chip-desc">Single post bulk photos & albums</div>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="mode-chip" data-mode="videos">
+                                <input type="radio" name="downloadMode" value="videos">
+                                <div class="chip-content">
+                                    <i data-lucide="video" class="chip-icon"></i>
+                                    <div>
+                                        <div class="chip-title">Videos Only</div>
+                                        <div class="chip-desc">High Definition 1080p & Reels</div>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="mode-chip" data-mode="both">
+                                <input type="radio" name="downloadMode" value="both">
+                                <div class="chip-content">
+                                    <i data-lucide="layers" class="chip-icon"></i>
+                                    <div>
+                                        <div class="chip-title">Force Both</div>
+                                        <div class="chip-desc">Download every photo and video</div>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Advanced Settings -->
+                    <div class="advanced-wrapper">
+                        <button type="button" class="btn-toggle-advanced" id="toggleAdvanced">
+                            <i data-lucide="sliders-horizontal"></i>
+                            <span>Advanced Cookie & Quality Options</span>
+                            <i data-lucide="chevron-down" class="chevron-icon" id="advancedChevron"></i>
+                        </button>
+                        <div class="advanced-content" id="advancedContent" style="display: none;">
+                            <div class="advanced-grid">
+                                <div class="setting-item">
+                                    <label for="browserCookies">Login Cookies (For Private/Group Posts):</label>
+                                    <select id="browserCookies" class="form-select">
+                                        <option value="">None (Public Posts - Fastest)</option>
+                                        <option value="chrome">Extract from Google Chrome</option>
+                                        <option value="edge">Extract from Microsoft Edge</option>
+                                        <option value="firefox">Extract from Mozilla Firefox</option>
+                                        <option value="brave">Extract from Brave Browser</option>
+                                    </select>
+                                    <small class="helper-text">Only needed if post requires Facebook login to view.</small>
+                                </div>
+                                <div class="setting-item">
+                                    <label>Destination Folder:</label>
+                                    <div class="dest-display">
+                                        <span id="destFolderText">{{ downloads_dir }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="submit-wrapper">
+                        <button type="button" id="btnStartDownload" class="btn-primary">
+                            <i data-lucide="arrow-down-to-line"></i>
+                            <span>Start Download</span>
+                        </button>
+                        <button type="button" id="btnCancelDownload" class="btn-danger" style="display: none;">
+                            <i data-lucide="circle-stop"></i>
+                            <span>Stop</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Live Download Progress Panel -->
+                <div class="progress-panel" id="progressPanel" style="display: none;">
+                    <div class="progress-info-row">
+                        <div class="status-badge" id="progressStatusText">
+                            <span class="spinner-small"></span>
+                            <span>Downloading media...</span>
+                        </div>
+                        <div class="progress-stats">
+                            <span class="stat-pill photos-pill">
+                                <i data-lucide="image"></i>
+                                <span id="statPhotos">0 Photos</span>
+                            </span>
+                            <span class="stat-pill videos-pill">
+                                <i data-lucide="film"></i>
+                                <span id="statVideos">0 Videos</span>
+                            </span>
+                            <span class="stat-pct" id="progressPct">0%</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- Live Terminal Output -->
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <span class="dot dot-red"></span>
+                                <span class="dot dot-yellow"></span>
+                                <span class="dot dot-green"></span>
+                            </div>
+                            <span class="terminal-title">PTM Prime Live Execution Log</span>
+                            <div class="terminal-tools">
+                                <button type="button" id="btnClearLogs" title="Clear Logs">Clear</button>
+                            </div>
+                        </div>
+                        <div class="terminal-body" id="terminalLog">
+                            <div class="log-line info">PTM Prime Downloader Engine v1.0.0 initialized.</div>
+                        </div>
+                    </div>
+
+                    <!-- Completed Action Bar -->
+                    <div class="completion-bar" id="completionBar" style="display: none;">
+                        <div class="success-message">
+                            <i data-lucide="check-circle-2" class="success-icon"></i>
+                            <div>
+                                <h4 id="successTitle">Downloads Completed!</h4>
+                                <p id="successSubtitle">All files have been saved to your downloads directory.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-success" id="btnOpenCompletedFolder">
+                            <i data-lucide="folder-check"></i>
+                            <span>Open In File Explorer</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features Showcase -->
+            <section class="features-section">
+                <div class="feature-card glass-panel">
+                    <div class="feature-icon-wrap icon-blue">
+                        <i data-lucide="images"></i>
+                    </div>
+                    <h3>Bulk Single-Post Photos</h3>
+                    <p>Download 10, 50, or 200+ photos uploaded in a single Facebook post or album at original high resolution.</p>
+                </div>
+
+                <div class="feature-card glass-panel">
+                    <div class="feature-icon-wrap icon-purple">
+                        <i data-lucide="clapperboard"></i>
+                    </div>
+                    <h3>Fast Video & Reels</h3>
+                    <p>Save high quality Facebook videos, reels, and watch videos with audio merged via ffmpeg automatically.</p>
+                </div>
+
+                <div class="feature-card glass-panel">
+                    <div class="feature-icon-wrap icon-cyan">
+                        <i data-lucide="mouse-pointer-click"></i>
+                    </div>
+                    <h3>One-Click Run</h3>
+                    <p>Double-click the <code>Start_PTM_Prime.bat</code> launcher on Windows to use without typing commands.</p>
+                </div>
+            </section>
+
+            <!-- Download History / Recent Files -->
+            <section class="history-section glass-panel">
+                <div class="history-header">
+                    <div class="history-title-wrap">
+                        <i data-lucide="history"></i>
+                        <h3>Recent Downloads</h3>
+                    </div>
+                    <button id="btnRefreshHistory" class="btn-secondary btn-sm" title="Refresh files list">
+                        <i data-lucide="refresh-cw"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <div class="history-empty">
+                        <i data-lucide="inbox"></i>
+                        <p>No recent downloads yet. Paste a Facebook link above to start!</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <p>PTM Prime Facebook Media Downloader • Powered by <strong>PTM Prime</strong></p>
+                <p class="copyright">Built for speed, simplicity, and bulk media extraction.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
